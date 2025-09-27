@@ -57,18 +57,41 @@ export async function registerWaiter(payload: { email: string; password: string 
 export type RoleOut = {
   id: number;
   business_id: number;
-  position: string;
+  position: 'waiter' | 'bartender' | 'barista' | 'hostess' | 'shift_manager';
   payment_per_hour: number;
+  min_hourly_wage?: number | null;
   location: string;
-  when_need: string;
-  experience_required: string;
+  when_need: 'this_week' | 'always_looking';
+  experience_required: 'no_experience' | 'some_experience' | 'experience_only';
   shift_morning: boolean;
   shift_evening: boolean;
   shift_weekends: boolean;
   shift_full_time: boolean;
   shift_part_time: boolean;
-  about_job: string;
+  about_job?: string | null;
+  is_active?: boolean;
+  created_at?: string;
+  updated_at?: string;
 };
+
+export type RoleCreate = {
+  business_id: number;
+  position: RoleOut['position'];
+  payment_per_hour: number;
+  location: string;
+  when_need: RoleOut['when_need'];
+  experience_required: RoleOut['experience_required'];
+  shift_morning: boolean;
+  shift_evening: boolean;
+  shift_weekends: boolean;
+  shift_full_time: boolean;
+  shift_part_time: boolean;
+  about_job?: string | null;
+  min_hourly_wage?: number | null;
+  is_active?: boolean;
+};
+
+export type RoleUpdate = Partial<Omit<RoleCreate, 'business_id'>> & { business_id?: number };
 
 export async function listRoles() {
   const { data } = await api.get<RoleOut[]>('/roles');
@@ -78,6 +101,40 @@ export async function listRoles() {
 export async function likeRole(roleId: number) {
   const { data } = await api.post(`/roles/${roleId}/like`);
   return data as { liked: boolean; mutual_match: boolean };
+}
+
+export async function getRole(roleId: number) {
+  const { data } = await api.get<RoleOut>(`/roles/${roleId}`);
+  return data;
+}
+
+export async function createRole(payload: RoleCreate) {
+  const { data } = await api.post<RoleOut>('/roles', payload);
+  return data;
+}
+
+export async function updateRole(roleId: number, payload: RoleUpdate) {
+  const { data } = await api.put<RoleOut>(`/roles/${roleId}`, payload);
+  return data;
+}
+
+export async function deleteRole(roleId: number) {
+  const { data } = await api.delete(`/roles/${roleId}`);
+  return data as { ok: boolean };
+}
+
+export type BusinessOut = {
+  id: number;
+  manager_user_id: number;
+  name: string;
+  location: string;
+  business_type: 'bar' | 'restaurant' | 'cafe' | 'hotel';
+  menu_url?: string;
+};
+
+export async function listBusinesses() {
+  const { data } = await api.get<BusinessOut[]>('/businesses');
+  return data;
 }
 
 export type NotificationOut = {
