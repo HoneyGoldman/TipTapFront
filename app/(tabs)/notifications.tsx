@@ -1,7 +1,7 @@
+import { deleteNotification, listNotifications, markNotificationRead, type NotificationOut } from '@/lib/api';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import React from 'react';
 import { FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { deleteNotification, listNotifications, markNotificationRead, type NotificationOut } from '@/lib/api';
 
 export default function NotificationsScreen() {
   const queryClient = useQueryClient();
@@ -17,7 +17,6 @@ export default function NotificationsScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Notifications</Text>
       <FlatList
         data={query.data}
         keyExtractor={(n) => String(n.id)}

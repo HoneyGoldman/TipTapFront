@@ -3,5 +3,7 @@
     "source.fixAll": "explicit",
     "source.organizeImports": "explicit",
     "source.sortMembers": "explicit"
-  }
+  },
+  "react-native.packager.port": 8081,
+  "react-native-tools.showExpoDebug": true
 }

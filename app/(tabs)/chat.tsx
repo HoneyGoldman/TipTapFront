@@ -1,13 +1,12 @@
+import { listConversations } from '@/lib/api';
+import { useQuery } from '@tanstack/react-query';
 import React from 'react';
 import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
-import { useQuery } from '@tanstack/react-query';
-import { listConversations } from '@/lib/api';
 
 export default function ChatScreen() {
   const query = useQuery({ queryKey: ['conversations'], queryFn: listConversations });
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Chat</Text>
       <FlatList
         data={query.data}
         keyExtractor={(c) => String(c.id)}

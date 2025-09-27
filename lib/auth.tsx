@@ -1,9 +1,9 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import type { Tokens } from './api';
 import { SECURE_STORE_KEYS } from './constants';
 import { deleteSecureItem, getSecureItem, saveSecureItem } from './secureStore';
-import type { Tokens } from './api';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type AuthContextType = {
   accessToken: string | null;
@@ -20,8 +20,11 @@ const queryClient = new QueryClient();
 const USER_STORAGE_KEY = 'tt_user';
 
 export type User = {
+  id?: number;
   email: string;
-  role: 'employer' | 'employee';
+  display_name?: string;
+  user_type: 'business_manager' | 'waiter';
+  is_active?: boolean;
 };
 
 export function Providers({ children }: { children: React.ReactNode }) {

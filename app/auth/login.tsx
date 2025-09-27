@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { login } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { Link, router } from 'expo-router';
 import { STYLES } from '@/lib/constants';
+import { Link, router } from 'expo-router';
+import React, { useState } from 'react';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 export default function LoginScreen() {
   const { setTokens, setUser } = useAuth();
@@ -17,8 +17,12 @@ export default function LoginScreen() {
     setError(null);
     try {
       const tokens = await login(email, password);
+      console.log(JSON.stringify(tokens));
+      if (!tokens.user_entity) {
+        throw new Error('User not found');
+      }
       await setTokens(tokens);
-      await setUser({ email, role: 'employee' });
+      await setUser(tokens.user_entity);
       router.replace('/(tabs)');
     } catch (e: any) {
       setError(e?.message ?? 'Login failed');

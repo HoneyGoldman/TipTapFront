@@ -1,11 +1,12 @@
 import Colors from "@/constants/Colors";
 
-export const API_BASE_URL = 'http://localhost:8000';
+export const API_BASE_URL = 'http://10.100.102.5:8000/';
 
 export const SECURE_STORE_KEYS = {
   accessToken: 'tt_access_token',
   refreshToken: 'tt_refresh_token',
   timeoutToken: 'tt_timeout_token',
+  user: 'tt_user',
 } as const;
 
 export const STYLES = {

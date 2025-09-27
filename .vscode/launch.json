@@ -11,6 +11,44 @@
             "request": "launch",
             "platform": "android",
             "isDynamic": true
+        },
+        {
+            "name": "Attach to Hermes (Expo Android)",
+            "cwd": "${workspaceFolder}",
+            "type": "reactnative",
+            "request": "attach",
+            "platform": "android",
+            "sourceMaps": true,
+            "port": 8081,
+            "enableDebug": true,
+            "expo": true
+        },
+        {
+            "name": "Attach to Hermes (Expo iOS)",
+            "cwd": "${workspaceFolder}",
+            "type": "reactnative",
+            "request": "attach",
+            "platform": "ios",
+            "sourceMaps": true,
+            "port": 8081,
+            "enableDebug": true,
+            "expo": true
+        },
+        {
+            "name": "Attach (Hermes direct) Android",
+            "cwd": "${workspaceFolder}",
+            "type": "reactnativedirect",
+            "request": "attach",
+            "platform": "android",
+            "trace": "verbose"
+        },
+        {
+            "name": "Attach (Hermes direct) iOS",
+            "cwd": "${workspaceFolder}",
+            "type": "reactnativedirect",
+            "request": "attach",
+            "platform": "ios",
+            "trace": "verbose"
         }
     ]
 }

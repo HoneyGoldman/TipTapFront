@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { User } from './auth';
 import { API_BASE_URL } from './constants';
 import { getSecureItem } from './secureStore';
 
@@ -17,12 +18,23 @@ export type Tokens = {
   access_token: string;
   refresh_token: string;
   timeout_token: string;
+  user_entity: User;
 };
 
-export async function login(email: string, password: string) {
-  const { data } = await api.post<Tokens>('/auth/login', { email, password });
-  return data;
-}
+  export async function login(email: string, password: string) {
+    const { data } = await api.post<Tokens>('/auth/login', { email, password });
+    return data;
+  }
+
+  export async function getUserById(id: number) {
+    const { data } = await api.get<User>(`/waiters/${id}`);
+    return data;
+  }
+
+  export async function getBusinessById(id: number) {
+    const { data } = await api.get<any>(`/businesses/${id}`);
+    return data;
+  }
 
 export async function registerManager(payload: {
   display_name: string;
