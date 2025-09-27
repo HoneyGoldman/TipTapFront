@@ -1,7 +1,8 @@
-import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios, { AxiosError, AxiosRequestConfig } from 'axios';
 import { User } from './auth';
 import { API_BASE_URL } from './constants';
-import { getSecureItem } from './secureStore';
+import { deleteSecureItem, getSecureItem, saveSecureItem } from './secureStore';
 
 export const api = axios.create({ baseURL: API_BASE_URL });
 
@@ -14,6 +15,79 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
+let isRefreshing = false;
+let refreshQueue: Array<(token: string | null) => void> = [];
+
+function subscribeTokenRefresh(cb: (token: string | null) => void) {
+  refreshQueue.push(cb);
+}
+
+function onRefreshed(token: string | null) {
+  refreshQueue.forEach((cb) => cb(token));
+  refreshQueue = [];
+}
+
+async function logoutAndRedirect() {
+  await deleteSecureItem('tt_access_token');
+  await deleteSecureItem('tt_refresh_token');
+  await deleteSecureItem('tt_timeout_token');
+  try { await AsyncStorage.removeItem('tt_user'); } catch {}
+  try {
+    const { router } = await import('expo-router');
+    router.replace('/start');
+  } catch {}
+}
+
+api.interceptors.response.use(
+  (response) => response,
+  async (error: AxiosError) => {
+    const originalRequest = error.config as (AxiosRequestConfig & { _retry?: boolean });
+    const status = error.response?.status;
+    if (status === 401 && !originalRequest?._retry) {
+      originalRequest._retry = true;
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          subscribeTokenRefresh(async (newToken) => {
+            if (!newToken) {
+              reject(error);
+              return;
+            }
+            try {
+              originalRequest.headers = originalRequest.headers ?? {};
+              (originalRequest.headers as any).Authorization = `Bearer ${newToken}`;
+              resolve(api(originalRequest));
+            } catch (e) {
+              reject(e);
+            }
+          });
+        });
+      }
+
+      isRefreshing = true;
+      try {
+        const newTokens = await refreshTokens();
+        const access = newTokens?.access_token ?? null;
+        onRefreshed(access);
+        isRefreshing = false;
+        if (!access) {
+          await logoutAndRedirect();
+          return Promise.reject(error);
+        }
+        // retry original request with new token
+        originalRequest.headers = originalRequest.headers ?? {};
+        (originalRequest.headers as any).Authorization = `Bearer ${access}`;
+        return api(originalRequest);
+      } catch (e) {
+        onRefreshed(null);
+        isRefreshing = false;
+        await logoutAndRedirect();
+        return Promise.reject(e);
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
 export type Tokens = {
   access_token: string;
   refresh_token: string;
@@ -25,6 +99,21 @@ export type Tokens = {
     const { data } = await api.post<Tokens>('/auth/login', { email, password });
     return data;
   }
+
+export async function refreshTokens() {
+  const refresh = await getSecureItem('tt_refresh_token');
+  if (!refresh) return null;
+  try {
+    const { data } = await api.post<Tokens>('/auth/refresh', { refresh_token: refresh });
+    await saveSecureItem('tt_access_token', data.access_token);
+    await saveSecureItem('tt_refresh_token', data.refresh_token);
+    await saveSecureItem('tt_timeout_token', data.timeout_token);
+    api.defaults.headers.common.Authorization = `Bearer ${data.access_token}`;
+    return data;
+  } catch (e) {
+    return null;
+  }
+}
 
   export async function getUserById(id: number) {
     const { data } = await api.get<User>(`/waiters/${id}`);
@@ -125,15 +214,63 @@ export async function deleteRole(roleId: number) {
 
 export type BusinessOut = {
   id: number;
-  manager_user_id: number;
+  manager_user_ids: number[];
   name: string;
   location: string;
   business_type: 'bar' | 'restaurant' | 'cafe' | 'hotel';
   menu_url?: string;
+  images?: string[];
 };
 
 export async function listBusinesses() {
   const { data } = await api.get<BusinessOut[]>('/businesses');
+  return data;
+}
+
+export type BusinessCreate = {
+  name: string;
+  location: string;
+  business_type: 'bar' | 'restaurant' | 'cafe' | 'hotel';
+  menu_url?: string;
+  images?: string[];
+  manager_user_ids?: number[];
+};
+
+export type BusinessUpdate = Partial<BusinessCreate>;
+
+export async function createBusiness(payload: BusinessCreate) {
+  const { data } = await api.post<BusinessOut>('/businesses', payload);
+  return data;
+}
+
+export async function updateBusiness(businessId: number, payload: BusinessUpdate) {
+  const { data } = await api.put<BusinessOut>(`/businesses/${businessId}`, payload);
+  return data;
+}
+
+export async function deleteBusiness(businessId: number) {
+  const { data } = await api.delete(`/businesses/${businessId}`);
+  return data as { ok: boolean };
+}
+
+export async function uploadBusinessImages(businessId: number, files: { uri: string; name?: string; type?: string }[]) {
+  const form = new FormData();
+  for (const f of files) {
+    form.append('files', {
+      // @ts-ignore - React Native File type
+      uri: f.uri,
+      name: f.name ?? 'upload.jpg',
+      type: f.type ?? 'image/jpeg',
+    } as any);
+  }
+  const { data } = await api.post<BusinessOut>(`/businesses/${businessId}/images`, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data;
+}
+
+export async function addBusinessManager(businessId: number, email: string) {
+  const { data } = await api.post<BusinessOut>(`/businesses/${businessId}/managers`, { email });
   return data;
 }
 

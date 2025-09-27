@@ -239,8 +239,12 @@ function RoleCard({ role, onEdit, onDelete }: { role: RoleOut; onEdit: () => voi
       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
         <Text style={styles.cardTitle}>{titleCase(role.position)} • ₪{role.payment_per_hour}/h</Text>
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          <TouchableOpacity onPress={onEdit}><Text style={styles.link}>Edit</Text></TouchableOpacity>
-          <TouchableOpacity onPress={onDelete}><Text style={[styles.link, { color: '#ff3b30' }]}>Delete</Text></TouchableOpacity>
+          <TouchableOpacity onPress={onEdit} style={styles.iconBtn} accessibilityLabel="Edit role" accessibilityRole="button">
+            <FontAwesome name="pencil" size={16} color="#0a7ea4" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onDelete} style={styles.iconBtn} accessibilityLabel="Delete role" accessibilityRole="button">
+            <FontAwesome name="trash" size={16} color="#ff3b30" />
+          </TouchableOpacity>
         </View>
       </View>
       <Text style={styles.dim}>{role.location}</Text>
@@ -481,6 +485,7 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 18, fontWeight: '700' },
   secondaryBtn: { backgroundColor: '#f2f2f2', paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10 },
   secondaryBtnText: { color: '#333', fontWeight: '700' },
+  iconBtn: { backgroundColor: '#f2f7fb', paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8 },
 });
 
 function PaymentSlider({ min, max, step, value, onChange }: { min: number; max: number; step: number; value: number; onChange: (v: number) => void }) {

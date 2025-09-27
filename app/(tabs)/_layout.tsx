@@ -57,8 +57,8 @@ export default function TabLayout() {
       }}
     />,
     <Tabs.Screen
-      key="two"
-      name="two"
+      key="profile"
+      name="profile"
       options={{
         title: 'Profile',
         tabBarIcon: ({ color }) => <TabBarIcon name="user" color={color} />,
@@ -116,8 +116,8 @@ export default function TabLayout() {
       }}
     />,
     <Tabs.Screen
-      key="two"
-      name="two"
+      key="profile"
+      name="profile"
       options={{
         title: 'Profile',
         tabBarIcon: ({ color }) => <TabBarIcon name="user" color={color} />,

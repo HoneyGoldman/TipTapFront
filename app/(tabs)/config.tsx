@@ -1,17 +1,10 @@
+import BusinessesManager from '@/components/BusinessesManager';
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
 
 export default function ConfigScreen() {
-  return (
-    <View style={styles.container}>
-      <Text>Settings coming soon...</Text>
-    </View>
-  );
+  return <BusinessesManager />;
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16 },
-  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 12 },
-});
+const styles = {} as any;
 
 
