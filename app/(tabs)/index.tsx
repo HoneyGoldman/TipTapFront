@@ -1,13 +1,30 @@
-import { likeRole, listRoles, type RoleOut } from '@/lib/api';
+import { getBusinessById, likeRole, listNearbyRoles, listRoles, type BusinessOut, type RoleOut } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import React, { useMemo, useState } from 'react';
-import { Dimensions, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import * as Location from 'expo-location';
+import React, { useMemo, useRef, useState } from 'react';
+import { Dimensions, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { Extrapolate, interpolate, runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 
 export default function TabOneScreen() {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
-  const rolesQuery = useQuery({ queryKey: ['roles'], queryFn: listRoles });
+  const rolesQuery = useQuery({
+    queryKey: ['roles_feed'],
+    queryFn: async () => {
+      try {
+        const perm = await Location.requestForegroundPermissionsAsync();
+        if (perm.status !== 'granted') return await listRoles();
+        const pos = await Location.getCurrentPositionAsync({});
+        const userId = (user as any)?.id ?? 0;
+        if (!userId) return await listRoles();
+        return await listNearbyRoles(userId, pos.coords.latitude, pos.coords.longitude, undefined);
+      } catch {
+        return await listRoles();
+      }
+    },
+  });
   const likeMut = useMutation({
     mutationFn: (id: number) => likeRole(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['roles'] }),
@@ -44,13 +61,96 @@ export default function TabOneScreen() {
 }
 
 function RoleCard({ role }: { role: RoleOut }) {
+  const biz = useQuery({ queryKey: ['business', role.business_id], queryFn: () => getBusinessById(role.business_id) });
+  const images = (biz.data as any as BusinessOut | undefined)?.images ?? [];
+  const businessName = (biz.data as any as BusinessOut | undefined)?.name;
+  const businessType = (biz.data as any as BusinessOut | undefined)?.business_type;
+  const menuUrl = (biz.data as any as BusinessOut | undefined)?.menu_url;
+  const location = (biz.data as any as BusinessOut | undefined)?.location ?? role.location;
   return (
-    <View style={styles.card}> 
-      <Text style={styles.cardTitle}>{role.position} • ₪{role.payment_per_hour}/h</Text>
-      <Text>{role.location}</Text>
-      <Text numberOfLines={6}>{role.about_job}</Text>
+    <View style={styles.card}>
+      {!!images.length && <ImagesCarousel images={images} />}
+      {!!businessName && (
+        <View style={{ marginBottom: 6 }}>
+          <Text style={{ fontSize: 16, fontWeight: '800' }}>{businessName}</Text>
+          <View style={styles.rowChips}>
+            {!!businessType && <Chip label={titleCase(businessType)} />}
+            {!!menuUrl && <Chip label="Menu" />}
+          </View>
+        </View>
+      )}
+      <Text style={styles.cardTitle}>{titleCase(role.position)} • ₪{role.payment_per_hour}/h</Text>
+      <Text style={styles.dim}>{location}</Text>
+      <View style={styles.rowChips}>
+        <Chip label={titleCase(role.when_need)} />
+        <Chip label={prettyExperience(role.experience_required)} />
+        {role.shift_morning && <Chip label="Morning" />}
+        {role.shift_evening && <Chip label="Evening" />}
+        {role.shift_weekends && <Chip label="Weekends" />}
+        {role.shift_full_time && <Chip label="Full-time" />}
+        {role.shift_part_time && <Chip label="Part-time" />}
+      </View>
+      {!!role.about_job && <Text numberOfLines={6}>{role.about_job}</Text>}
     </View>
   );
+}
+
+function ImagesCarousel({ images }: { images: string[] }) {
+  const [index, setIndex] = useState(0);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const scroller = useRef<ScrollView | null>(null);
+  const total = images.length;
+  const height = 220;
+  if (!total) return null;
+  const advance = () => {
+    if (!containerWidth) return;
+    const next = (index + 1) % total;
+    setIndex(next);
+    scroller.current?.scrollTo({ x: next * containerWidth, animated: true });
+  };
+  return (
+    <Pressable onPress={advance}>
+      <View onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}>
+        <ScrollView
+          ref={scroller}
+          horizontal
+          pagingEnabled
+          snapToInterval={containerWidth || undefined}
+          decelerationRate="fast"
+          showsHorizontalScrollIndicator={false}
+          onMomentumScrollEnd={(e) => {
+            const width = containerWidth || e.nativeEvent.layoutMeasurement.width;
+            const x = e.nativeEvent.contentOffset.x;
+            const idx = Math.round(x / width);
+            if (!Number.isNaN(idx)) setIndex(Math.min(Math.max(idx, 0), total - 1));
+          }}
+          style={{ height, borderRadius: 12, overflow: 'hidden', backgroundColor: '#eee', marginBottom: 10 }}
+        >
+          {images.map((uri) => (
+            <View key={uri} style={{ width: containerWidth || '100%', height }}>
+              <Image source={{ uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+            </View>
+          ))}
+        </ScrollView>
+        <View style={{ position: 'absolute', bottom: 8, right: 8, backgroundColor: '#00000066', paddingVertical: 2, paddingHorizontal: 8, borderRadius: 999 }}>
+          <Text style={{ color: '#fff', fontWeight: '700' }}>{index + 1} / {total}</Text>
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
+function titleCase(s: string) { return s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()); }
+function prettyExperience(s: RoleOut['experience_required']) {
+  switch (s) {
+    case 'no_experience': return 'No experience';
+    case 'some_experience': return 'Some experience';
+    case 'experience_only': return 'Experience only';
+    default: return titleCase(String(s));
+  }
+}
+function Chip({ label }: { label: string }) {
+  return <View style={styles.badge}><Text style={styles.badgeText}>{label}</Text></View>;
 }
 
 function SwipeDeck({
@@ -179,6 +279,10 @@ const styles = StyleSheet.create({
   cardWrap: { position: 'absolute', width: '100%' },
   card: { borderWidth: 1, borderColor: '#ddd', padding: 16, borderRadius: 16, backgroundColor: '#fff' },
   cardTitle: { fontSize: 18, fontWeight: '700', marginBottom: 8 },
+  dim: { color: '#666', marginBottom: 6 },
+  rowChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
+  badge: { flexDirection: 'row', gap: 6, backgroundColor: '#0ea5e9', paddingVertical: 6, paddingHorizontal: 10, borderRadius: 999, alignItems: 'center' },
+  badgeText: { color: '#fff', fontWeight: '700' },
   likeBadge: {
     position: 'absolute',
     top: 16,

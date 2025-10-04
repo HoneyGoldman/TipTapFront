@@ -1,4 +1,5 @@
 import { BusinessCreate, BusinessOut, BusinessUpdate, addBusinessManager, createBusiness, deleteBusiness, listBusinesses, updateBusiness, uploadBusinessImages } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import 'expo-image-picker';
@@ -7,8 +8,10 @@ import React, { useState } from 'react';
 import { FlatList, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 export default function BusinessesManager() {
+  const { user } = useAuth();
+  const managerUserId = (user as any)?.id ?? 0;
   const queryClient = useQueryClient();
-  const bizQuery = useQuery({ queryKey: ['businesses'], queryFn: listBusinesses });
+  const bizQuery = useQuery({ queryKey: ['businesses'], queryFn: () => listBusinesses(managerUserId) });
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<BusinessOut | null>(null);
 
@@ -31,10 +34,25 @@ export default function BusinessesManager() {
   const onSave = async (payload: BusinessCreate | BusinessUpdate) => {
     if (editing) {
       await updateMut.mutateAsync({ id: editing.id, payload: payload as BusinessUpdate });
-    } else {
-      await createMut.mutateAsync(payload as BusinessCreate);
+      setEditorOpen(false);
+      return;
     }
-    setEditorOpen(false);
+    const createPayload: BusinessCreate = {
+      ...(payload as BusinessCreate),
+      manager_user_ids: (payload as BusinessCreate).manager_user_ids?.length
+        ? (payload as BusinessCreate).manager_user_ids
+        : [managerUserId],
+    };
+    const created = await createMut.mutateAsync(createPayload);
+    try {
+      const images = (payload as BusinessCreate).images || [];
+      if (images.length) {
+        const files = images.map((uri) => ({ uri, name: 'image.jpg', type: 'image/jpeg' }));
+        await uploadBusinessImages(created.id, files);
+      }
+    } finally {
+      setEditorOpen(false);
+    }
   };
 
   const onDelete = async (id: number) => {
@@ -82,15 +100,30 @@ export default function BusinessesManager() {
         contentContainerStyle={{ paddingBottom: 24 }}
       />
 
-      <BusinessEditorModal visible={editorOpen} onClose={() => setEditorOpen(false)} onSave={onSave} biz={editing} />
+      <BusinessEditorModal key={editing ? String(editing.id) : 'new'} visible={editorOpen} onClose={() => setEditorOpen(false)} onSave={onSave} biz={editing} requesterUserId={managerUserId} />
     </View>
   );
 }
 
-function BusinessImagesCarousel({ images, onRemove }: { images: string[]; onRemove?: (uri: string, index: number) => void }) {
+function toImagesList(input: any): string[] {
+  if (!input) return [];
+  if (Array.isArray(input)) return input.filter(Boolean);
+  if (typeof input === 'string') {
+    try {
+      const parsed = JSON.parse(input);
+      return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+function BusinessImagesCarousel({ images, onRemove }: { images: string[] | string | undefined | null; onRemove?: (uri: string, index: number) => void }) {
+  const safeImages = toImagesList(images);
   const [index, setIndex] = useState(0);
   const [containerWidth, setContainerWidth] = useState(0);
-  const total = images.length;
+  const total = safeImages.length;
   const onNext = () => setIndex((prev) => (prev + 1) % total);
   const onPrev = () => setIndex((prev) => (prev - 1 + total) % total);
   if (!total) return null;
@@ -111,7 +144,7 @@ function BusinessImagesCarousel({ images, onRemove }: { images: string[]; onRemo
         }}
         style={{ height, borderRadius: 12, overflow: 'hidden', backgroundColor: '#eee' }}
       >
-        {images.map((uri) => (
+        {safeImages.map((uri) => (
           <View key={uri} style={{ width: containerWidth || '100%', height }}>
             <Image source={{ uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
           </View>
@@ -122,7 +155,7 @@ function BusinessImagesCarousel({ images, onRemove }: { images: string[]; onRemo
       </View>
       {!!onRemove && total > 0 && (
         <View style={{ position: 'absolute', top: 8, right: 8 }}>
-          <TouchableOpacity style={styles.carouselBtn} onPress={() => onRemove(images[index], index)}>
+          <TouchableOpacity style={styles.carouselBtn} onPress={() => onRemove(safeImages[index], index)}>
             <FontAwesome name="trash" size={16} color="#fff" />
           </TouchableOpacity>
         </View>
@@ -158,7 +191,7 @@ function IconBtn({ icon, onPress, color = '#0a7ea4' }: { icon: React.ComponentPr
   );
 }
 
-function BusinessEditorModal({ visible, onClose, onSave, biz }: { visible: boolean; onClose: () => void; onSave: (p: BusinessCreate | BusinessUpdate) => void | Promise<void>; biz: BusinessOut | null }) {
+function BusinessEditorModal({ visible, onClose, onSave, biz, requesterUserId }: { visible: boolean; onClose: () => void; onSave: (p: BusinessCreate | BusinessUpdate & { requester_user_id?: number }) => void | Promise<void>; biz: BusinessOut | null; requesterUserId: number }) {
   const queryClient = useQueryClient();
   const [form, setForm] = useState<BusinessCreate | BusinessUpdate>(() => biz ? {
     name: biz.name,
@@ -199,7 +232,7 @@ function BusinessEditorModal({ visible, onClose, onSave, biz }: { visible: boole
     if (!biz) return;
     setRemovingImage(true);
     try {
-      const currentImages: string[] = ((form as any).images ?? biz.images ?? []) as string[];
+      const currentImages: string[] = toImagesList((form as any).images ?? biz.images);
       const next = currentImages.filter((_, i) => i !== idx);
       await updateBusiness(biz.id, { images: next });
       set({ images: next as any });
@@ -213,7 +246,7 @@ function BusinessEditorModal({ visible, onClose, onSave, biz }: { visible: boole
     setManagerLoading(true);
     setManagerError(null);
     try {
-      await addBusinessManager(biz.id, managerEmail);
+      await addBusinessManager(biz.id, requesterUserId, managerEmail);
       setManagerEmail('');
     } catch (e: any) {
       setManagerError(e?.message ?? 'Failed to add manager');
@@ -286,7 +319,7 @@ function BusinessEditorModal({ visible, onClose, onSave, biz }: { visible: boole
   );
 }
 
-function AddManagerModal({ visible, onClose, biz }: { visible: boolean; onClose: () => void; biz: BusinessOut | null }) {
+function AddManagerModal({ visible, onClose, biz, requesterUserId }: { visible: boolean; onClose: () => void; biz: BusinessOut | null; requesterUserId: number }) {
   const [value, setValue] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -296,7 +329,7 @@ function AddManagerModal({ visible, onClose, biz }: { visible: boolean; onClose:
     setLoading(true);
     setError(null);
     try {
-      await addBusinessManager(biz.id, value);
+      await addBusinessManager(biz.id, requesterUserId, value);
       onClose();
     } catch (e: any) {
       setError(e?.message ?? 'Failed to add manager');

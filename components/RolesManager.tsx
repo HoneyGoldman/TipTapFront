@@ -3,8 +3,10 @@ import { useAuth } from '@/lib/auth';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import Slider from '@react-native-community/slider';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import * as Location from 'expo-location';
 import React, { useMemo, useState } from 'react';
 import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import MapView, { Marker } from 'react-native-maps';
 
 const POSITIONS: RoleOut['position'][] = ['waiter', 'bartender', 'barista', 'hostess', 'shift_manager'];
 const WHEN_NEED: RoleOut['when_need'][] = ['this_week', 'always_looking'];
@@ -170,6 +172,29 @@ export default function RolesManager() {
         setMapPickerOpen={setMapPickerOpen}
       />
     </View>
+  );
+}
+
+function MapPickerModal({ visible, onClose, initial, onPick }: { visible: boolean; onClose: () => void; initial: { latitude: number; longitude: number }; onPick: (coords: { latitude: number; longitude: number }) => void }) {
+  const [coord, setCoord] = useState<{ latitude: number; longitude: number }>(initial);
+  const region = { latitude: coord.latitude, longitude: coord.longitude, latitudeDelta: 0.02, longitudeDelta: 0.02 } as const;
+  return (
+    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+      <View style={{ flex: 1 }}>
+        <MapView style={{ flex: 1 }} initialRegion={region} onPress={(e) => setCoord(e.nativeEvent.coordinate)}>
+          <Marker coordinate={coord} />
+        </MapView>
+        <View style={{ position: 'absolute', top: 50, right: 16, backgroundColor: '#00000066', paddingVertical: 6, paddingHorizontal: 10, borderRadius: 999 }}>
+          <Text style={{ color: '#fff', fontWeight: '700' }}>{coord.latitude.toFixed(5)}, {coord.longitude.toFixed(5)}</Text>
+        </View>
+        <View style={{ padding: 12, backgroundColor: '#fff' }}>
+          <TouchableOpacity style={styles.primaryBtn} onPress={() => onPick(coord)}>
+            <Text style={styles.primaryBtnText}>Use this location</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={{ marginTop: 8 }} onPress={onClose}><Text style={styles.link}>Cancel</Text></TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -360,14 +385,14 @@ function RoleEditorModal({ visible, onClose, onSave, role, businesses, defaultBu
                 const res = await reverseGeocodeAsync({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
                 const first = res[0];
                 const pretty = [first?.name, first?.street, first?.city, first?.region].filter(Boolean).join(', ');
-                set({ location: pretty || `${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}` });
+                set({ location: pretty || `${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}`, latitude: pos.coords.latitude, longitude: pos.coords.longitude });
               } catch {}
             }}>
               <Text style={styles.secondaryBtnText}>Use my location</Text>
             </TouchableOpacity>
-            {/* <TouchableOpacity style={styles.secondaryBtn} onPress={() => setMapPickerOpen(true)}>
+            <TouchableOpacity style={styles.secondaryBtn} onPress={() => setMapPickerOpen(true)}>
               <Text style={styles.secondaryBtnText}>Pick on map</Text>
-            </TouchableOpacity> */}
+            </TouchableOpacity>
           </View>
           <Select
             label="When needed"
@@ -403,6 +428,22 @@ function RoleEditorModal({ visible, onClose, onSave, role, businesses, defaultBu
             multiline
           />
         </ScrollView>
+        <MapPickerModal
+          visible={mapPickerOpen}
+          onClose={() => setMapPickerOpen(false)}
+          initial={{ latitude: (form as any).latitude ?? 32.0853, longitude: (form as any).longitude ?? 34.7818 }}
+          onPick={async (coords) => {
+            try {
+              const res = await Location.reverseGeocodeAsync(coords);
+              const first = res[0];
+              const pretty = [first?.name, first?.street, first?.city, first?.region].filter(Boolean).join(', ');
+              set({ latitude: coords.latitude, longitude: coords.longitude, location: pretty || `${coords.latitude.toFixed(5)}, ${coords.longitude.toFixed(5)}` });
+            } catch {
+              set({ latitude: coords.latitude, longitude: coords.longitude });
+            }
+            setMapPickerOpen(false);
+          }}
+        />
         <TouchableOpacity style={[styles.primaryBtn, { marginTop: 8 }]} onPress={submit}>
           <Text style={styles.primaryBtnText}>{role ? 'Save Changes' : 'Create Role'}</Text>
         </TouchableOpacity>

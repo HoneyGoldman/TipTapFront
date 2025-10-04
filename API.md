@@ -15,88 +15,78 @@ Tokens object (response)
 }
 ```
 
-### 1) Auth
+### 1) Auth (via dynamic reports)
+Notes:
+- Some reports require Authorization. This is controlled by the `authorized_required` flag in `report_configuration`.
+- Signup-related reports do not require Authorization (flag = 0).
 
-- POST /auth/register-manager
+- Register manager (basic): POST /reports/run
   - Body:
   ```json
   {
-    "display_name": "Manager One",
-    "email": "manager1@example.com",
-    "password": "Passw0rd!",
-    "business_name": "Cafe Luna",
-    "business_location": "Tel Aviv",
-    "business_type": "cafe",
-    "menu_url": "https://example.com/menu.pdf"
+    "report_name": "user_register_manager_basic",
+    "parameters": {
+      "p_display_name": "Manager One",
+      "p_email": "manager1@example.com",
+      "p_password_hash": "<bcrypt-or-pbkdf2-hash>"
+    }
   }
   ```
-  - Response: Tokens
 
-- POST /auth/register
-  - Creates a basic waiter account; minimal payload same as login request
+- Get user by email: POST /reports/run
   - Body:
   ```json
-  {
-    "email": "waiter1@example.com",
-    "password": "Passw0rd!"
-  }
+  { "report_name": "user_get_by_email", "parameters": { "p_email": "user@example.com" } }
   ```
-  - Response: Tokens
 
-- POST /auth/login
+- POST /auth/refresh
   - Body:
   ```json
-  {
-    "email": "manager1@example.com",
-    "password": "Passw0rd!"
-  }
+  { "refresh_token": "<refresh_token>" }
   ```
   - Response: Tokens
+  - Notes: Rotates tokens and sets the new access token; requires no Authorization header.
 
 Notes: Passwords are stored with PBKDF2-SHA256. No 72-byte limit.
 
-### 2) Waiters
+### 2) Waiters (via dynamic reports)
 
-All endpoints require Authorization header.
-
-- POST /waiters
-  - Body (WaiterCreate):
+- Register waiter (full): POST /reports/run
+  - Body:
   ```json
   {
-    "display_name": "Waiter One",
-    "email": "waiter1@example.com",
-    "password": "Passw0rd!",
-    "status": "pre_army",
-    "looking_for": ["waiter", "bartender"],
-    "about_me": "Friendly and fast.",
-    "distance_km": 10,
-    "min_hourly_wage": 40,
-    "shifts_per_week": 4,
-    "hours": ["morning", "weekends"],
-    "experience": ["waiter"],
-    "people_say": ["good_vibe"],
-    "skills": ["customer_service", "teamwork"]
+    "report_name": "waiter_register_full",
+    "parameters": {
+      "p_display_name": "Waiter One",
+      "p_email": "waiter1@example.com",
+      "p_password_hash": "<hash>",
+      "p_status": "pre_army",
+      "p_about_me": "Friendly and fast.",
+      "p_distance_km": 10,
+      "p_min_hourly_wage": 40,
+      "p_shifts_per_week": 4,
+      "p_hours": ["morning"],
+      "p_experience": ["waiter"],
+      "p_people_say": ["good_vibe"],
+      "p_skills": ["teamwork"],
+      "p_looking_for": ["waiter"]
+    }
   }
   ```
-  - Response (WaiterOut): waiter profile with all lists
 
-- GET /waiters/{user_id}
-  - Response: WaiterOut
-
-- PUT /waiters/{user_id}
-  - Body (any subset):
+- Upsert waiter profile: POST /reports/run
+  - Body:
   ```json
   {
-    "display_name": "Updated Name",
-    "about_me": "Updated bio",
-    "looking_for": ["waiter", "barista"],
-    "hours": ["morning"],
-    "experience": ["waiter"],
-    "people_say": ["good_vibe"],
-    "skills": ["teamwork"]
+    "report_name": "waiter_upsert_profile",
+    "parameters": {
+      "p_user_id": 123,
+      "p_status": "post_army",
+      "p_about_me": "Updated",
+      "p_hours": ["morning","weekends"]
+    }
   }
   ```
-  - Response: WaiterOut
 
 - DELETE /waiters/{user_id}
   - Response: { "ok": true }
@@ -108,61 +98,49 @@ All endpoints require Authorization header.
   { "liked": true, "mutual_match": false }
   ```
 
-### 3) Businesses (manager only)
+### 3) Businesses (via dynamic reports)
 
-- POST /businesses
+- Create business: POST /reports/run
   - Body:
   ```json
   {
-    "name": "Cafe Luna",
-    "location": "Tel Aviv",
-    "business_type": "cafe",
-    "menu_url": "https://example.com/menu.pdf",
-    "images": [
-      "https://res.cloudinary.com/<cloud>/image/upload/v1699999999/cafe-1.jpg"
-    ],
-    "manager_user_ids": [123, 456]
-  }
-  ```
-  - Response:
-  ```json
-  {
-    "id": 1,
-    "manager_user_ids": [123, 456],
-    "name": "Cafe Luna",
-    "location": "Tel Aviv",
-    "business_type": "cafe",
-    "menu_url": "https://example.com/menu.pdf",
-    "images": [
-      "https://res.cloudinary.com/<cloud>/image/upload/v1699999999/cafe-1.jpg"
-    ]
+    "report_name": "business_create",
+    "parameters": {
+      "p_name": "Cafe Luna", "p_location": "Tel Aviv", "p_business_type": "cafe",
+      "p_menu_url": "https://example.com/menu.pdf",
+      "p_images": ["https://.../cafe-1.jpg"],
+      "p_manager_user_ids": [123,456]
+    }
   }
   ```
   - Notes:
     - If `manager_user_ids` is omitted, the authenticated user is added as a manager.
     - `images` is an array of image URLs (Cloudinary). You can also upload files via a dedicated endpoint below.
 
-- GET /businesses
-  - Response: [BusinessOut]
+- List my businesses: POST /reports/run
+  - Body:
+  ```json
+  { "report_name": "business_list_by_manager", "parameters": { "p_manager_user_id": 123 } }
+  ```
 
-- GET /businesses/{business_id}
-  - Response: BusinessOut
+- Get a business: POST /reports/run
+  - Body:
+  ```json
+  { "report_name": "business_get", "parameters": { "p_business_id": 1, "p_manager_user_id": 123 } }
+  ```
 
-- PUT /businesses/{business_id}
-  - Body (any subset):
+- Update business: POST /reports/run
+  - Body (partial updates via JSON):
   ```json
   {
-    "name": "Cafe Luna Updated",
-    "location": "Herzliya",
-    "business_type": "cafe",
-    "menu_url": "https://example.com/menu-v2.pdf",
-    "images": [
-      "https://res.cloudinary.com/<cloud>/image/upload/v1699999999/cafe-1.jpg",
-      "https://res.cloudinary.com/<cloud>/image/upload/v1699999999/cafe-2.jpg"
-    ]
+    "report_name": "business_update",
+    "parameters": {
+      "p_business_id": 1,
+      "p_manager_user_id": 123,
+      "p_updates": { "name": "Cafe Luna Updated", "images": ["https://.../cafe-1.jpg"] }
+    }
   }
   ```
-  - Response: BusinessOut
   - Notes: Setting `images` here replaces the entire list. To append images, use the upload endpoint.
 
 - POST /businesses/{business_id}/images
@@ -178,87 +156,87 @@ All endpoints require Authorization header.
     http://localhost:8000/businesses/1/images
   ```
 
-- POST /businesses/{business_id}/managers
-  - Description: Add an existing business manager to the business by email.
+- Add manager by email: POST /reports/run
   - Body:
   ```json
-  { "email": "manager2@example.com" }
-  ```
-  - Response: BusinessOut (with updated `manager_user_ids`)
-  - Notes:
-    - Only a current manager of the business can add another manager.
-    - The target user must exist and have `user_type` = `business_manager`.
-    - Phone-based add is not yet supported and returns 400 if provided.
-  - Example (curl):
-  ```bash
-  curl -X POST \
-    -H "Authorization: Bearer <access_token>" \
-    -H "Content-Type: application/json" \
-    -d '{"email":"manager2@example.com"}' \
-    http://localhost:8000/businesses/1/managers
+  {
+    "report_name": "business_add_manager_by_email",
+    "parameters": { "p_business_id": 1, "p_requester_id": 123, "p_email": "manager2@example.com" }
+  }
   ```
 
 - DELETE /businesses/{business_id}
   - Response: { "ok": true }
 
-### 4) Roles (job postings)
+### 4) Roles (via dynamic reports)
 
-- POST /roles (manager)
+- Create role: POST /reports/run
   - Body:
   ```json
   {
-    "business_id": 1,
-    "position": "waiter",
-    "payment_per_hour": 45,
-    "location": "Tel Aviv",
-    "when_need": "this_week",
-    "experience_required": "no_experience",
-    "shift_morning": true,
-    "shift_evening": false,
-    "shift_weekends": true,
-    "shift_full_time": false,
-    "shift_part_time": true,
-    "about_job": "Friendly team"
+    "report_name": "role_create",
+    "parameters": {
+      "p_business_id": 1,
+      "p_position": "waiter",
+      "p_payment_per_hour": 45,
+      "p_location": "Tel Aviv",
+      "p_latitude": 32.0853,
+      "p_longitude": 34.7818,
+      "p_when_need": "this_week",
+      "p_experience_required": "no_experience",
+      "p_shift_morning": true,
+      "p_shift_evening": false,
+      "p_shift_weekends": true,
+      "p_shift_full_time": false,
+      "p_shift_part_time": true,
+      "p_about_job": "Friendly team",
+      "p_min_hourly_wage": 40,
+      "p_is_active": 1,
+      "p_manager_user_id": 123
+    }
   }
   ```
-  - Response: RoleOut
 
-- GET /roles (public)
-  - Response: [RoleOut] for active roles
-
-- GET /roles/{role_id} (public)
-  - Response: RoleOut
-
-- PUT /roles/{role_id} (manager who owns the business)
-  - Body: RoleUpdate (any subset of fields)
-  - Response: RoleOut
-
-- DELETE /roles/{role_id} (manager who owns the business)
-  - Response: { "ok": true }
-
-- POST /roles/{role_id}/like (waiter)
-  - Response:
-  ```json
-  { "liked": true, "mutual_match": false }
-  ```
-
-### 5) Notifications
-
-- GET /notifications
-  - Response: [NotificationOut]
-
-- POST /notifications
+- Get role: POST /reports/run
   - Body:
   ```json
-  { "user_id": 123, "type": "new_message", "payload": {"text": "hi"} }
+  { "report_name": "role_get", "parameters": { "p_role_id": 1 } }
   ```
-  - Response: NotificationOut
 
-- POST /notifications/{notification_id}/read
-  - Response: { "ok": true }
+- Update role: POST /reports/run
+  - Body:
+  ```json
+  {
+    "report_name": "role_update",
+    "parameters": { "p_role_id": 1, "p_manager_user_id": 123, "p_updates": { "position": "bartender" } }
+  }
+  ```
 
-- DELETE /notifications/{notification_id}
-  - Response: { "ok": true }
+- Delete role: POST /reports/run
+  - Body:
+  ```json
+  { "report_name": "role_delete", "parameters": { "p_role_id": 1, "p_manager_user_id": 123 } }
+  ```
+
+- Like role: POST /reports/run
+  - Body:
+  ```json
+  { "report_name": "role_like", "parameters": { "p_role_id": 1, "p_user_id": 456 } }
+  ```
+
+### 5) Notifications (via dynamic reports)
+
+- List: POST /reports/run
+  - Body: `{ "report_name": "notifications_list", "parameters": { "p_user_id": 123 } }`
+
+- Create: POST /reports/run
+  - Body: `{ "report_name": "notifications_create", "parameters": { "p_user_id": 123, "p_type": "new_message", "p_payload": {"text":"hi"} } }`
+
+- Mark read: POST /reports/run
+  - Body: `{ "report_name": "notification_mark_read", "parameters": { "p_notification_id": 1, "p_user_id": 123 } }`
+
+- Delete: POST /reports/run
+  - Body: `{ "report_name": "notification_delete", "parameters": { "p_notification_id": 1, "p_user_id": 123 } }`
 
 ### 6) Reports
 
@@ -278,33 +256,22 @@ All endpoints require Authorization header.
   }
   ```
 
-### 7) Chat (optional)
+### 7) Chat (via dynamic reports)
 
-- POST /chat/conversations
-  - Body:
-  ```json
-  { "participant_user_ids": [456] }
-  ```
-  - Response:
-  ```json
-  { "id": 99, "participant_user_ids": [123, 456] }
-  ```
+- Create conversation: POST /reports/run
+  - Body: `{ "report_name": "chat_create_conversation", "parameters": { "p_initiator_user_id": 123, "p_participant_user_ids": [456] } }`
 
-- GET /chat/conversations
-  - Response: [ { "id": 99, "participant_user_ids": [123,456] } ]
+- List conversations: POST /reports/run
+  - Body: `{ "report_name": "chat_list_conversations", "parameters": { "p_user_id": 123 } }`
 
-- POST /chat/messages
-  - Body:
-  ```json
-  { "conversation_id": 99, "body": "Hello!" }
-  ```
-  - Response (MessageOut): id, conversation_id, sender_user_id, body, created_at, read_at
+- Post message: POST /reports/run
+  - Body: `{ "report_name": "chat_post_message", "parameters": { "p_conversation_id": 99, "p_sender_user_id": 123, "p_body": "Hello!" } }`
 
-- GET /chat/messages?conversation_id={id}
-  - Response: [MessageOut]
+- List messages: POST /reports/run
+  - Body: `{ "report_name": "chat_list_messages", "parameters": { "p_conversation_id": 99, "p_user_id": 123 } }`
 
-- POST /chat/messages/{message_id}/read
-  - Response: { "ok": true }
+- Mark message read: POST /reports/run
+  - Body: `{ "report_name": "chat_mark_message_read", "parameters": { "p_message_id": 1, "p_user_id": 123 } }`
 
 ### Enumerations (allowed values)
 - waiter status: pre_army | post_army | student | other
